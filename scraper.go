@@ -9,12 +9,15 @@ import (
 	"github.com/gocolly/colly"
 )
 
-func HandleTweet(*colly.Collector) {
-	fmt.Println("Tweet")
+type WaybackData struct {
+	Id  string
+	Url string
 }
 
-func main() {
+var waybackData []WaybackData
 
+// tweetCollector gets all of the data necessary to query the tweets from the Wayback Machine.
+func tweetCollector() {
 	c := colly.NewCollector(
 		colly.AllowedDomains("archive.org", "web.archive.org"),
 	)
@@ -49,19 +52,21 @@ func main() {
 	c.OnResponse(func(r *colly.Response) {
 		fmt.Println("Page visited: ", r.Request.URL)
 		var resp [][]string
-		var urls []string
 
 		if err := json.Unmarshal(r.Body, &resp); err != nil {
 			panic(err)
 		}
 		for _, ov := range resp {
-			for _, iv := range ov {
-				urls = append(urls, iv)
+			if ov[1] == "text/html" {
+				waybackData = append(waybackData, WaybackData{
+					Id:  ov[0],
+					Url: ov[2],
+				})
 			}
 		}
 
 		// use urls
-		for _, url := range urls {
+		for _, url := range waybackData {
 			fmt.Println(url)
 		}
 	})
@@ -73,5 +78,12 @@ func main() {
 
 	c.Wait()
 
-	// fmt.Printf("initial_url: %s", initial_url)
+}
+
+func handleTweets(*colly.Collector) {
+	fmt.Println("Tweet")
+}
+
+func main() {
+	tweetCollector()
 }
