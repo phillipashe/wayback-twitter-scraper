@@ -20,8 +20,8 @@ var waybackData []WaybackData
 func tweetCollector() {
 	c := colly.NewCollector(
 		colly.AllowedDomains("archive.org", "web.archive.org"),
+		colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"),
 	)
-	c.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
 	var initial_url string
 	file, err := os.ReadFile("settings.json")
@@ -38,36 +38,28 @@ func tweetCollector() {
 		panic(errors.New("initial_url is required"))
 	}
 
-	// // called before an HTTP request is triggered
 	c.OnRequest(func(r *colly.Request) {
 		fmt.Println("Requesting initial JSON of URLs")
 	})
 
-	// // triggered when the scraper encounters an error
 	c.OnError(func(_ *colly.Response, err error) {
 		fmt.Println("Something went wrong: ", err)
 	})
 
-	// fired when the server responds
 	c.OnResponse(func(r *colly.Response) {
-		fmt.Println("Page visited: ", r.Request.URL)
 		var resp [][]string
 
 		if err := json.Unmarshal(r.Body, &resp); err != nil {
 			panic(err)
 		}
 		for _, ov := range resp {
+			// only get text pages, because these contain the full tweet data
 			if ov[1] == "text/html" {
 				waybackData = append(waybackData, WaybackData{
 					Id:  ov[0],
 					Url: ov[2],
 				})
 			}
-		}
-
-		// use urls
-		for _, url := range waybackData {
-			fmt.Println(url)
 		}
 	})
 
@@ -77,13 +69,32 @@ func tweetCollector() {
 	}
 
 	c.Wait()
-
 }
 
-func handleTweets(*colly.Collector) {
-	fmt.Println("Tweet")
+func handleTweets() {
+	c := colly.NewCollector(
+		colly.AllowedDomains("archive.org", "web.archive.org"),
+		colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"),
+	)
+
+	c.OnRequest(func(r *colly.Request) {
+		fmt.Printf("Visiting %s\n", r.URL)
+	})
+
+	c.OnError(func(_ *colly.Response, err error) {
+		fmt.Println("Something went wrong: ", err)
+	})
+
+	c.OnResponse(func(r *colly.Response) {
+		fmt.Println("Page visited: ", r.Request.URL)
+	})
+
+	if err := c.Visit(""); err != nil {
+		fmt.Println(err.Error())
+	}
 }
 
 func main() {
 	tweetCollector()
+	handleTweets()
 }
