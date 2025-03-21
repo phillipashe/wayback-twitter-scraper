@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gocolly/colly"
 )
@@ -15,6 +17,14 @@ type WaybackData struct {
 }
 
 var waybackData []WaybackData
+
+func extractFilename(url string) string {
+	parts := strings.Split(url, "/")
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return url
+}
 
 // tweetCollector gets all of the data necessary to query the tweets from the Wayback Machine.
 func tweetCollector() {
@@ -77,27 +87,40 @@ func handleTweets() {
 		colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"),
 	)
 
-	c.OnRequest(func(r *colly.Request) {
-		fmt.Printf("Visiting %s\n", r.URL)
-	})
-
 	c.OnError(func(_ *colly.Response, err error) {
 		fmt.Println("Something went wrong: ", err)
 	})
 
 	c.OnResponse(func(r *colly.Response) {
-		fmt.Println("Page visited: ", r.Request.URL)
 		// Redirects mean it's a retweet
 		if r.StatusCode >= 300 && r.StatusCode < 400 {
+			fmt.Println("Skipping page because it is a redirect or retweet: ", r.Request.URL)
 			return
 		}
 	})
 
 	c.OnHTML(".AdaptiveMedia-container", func(e *colly.HTMLElement) {
 		e.ForEach("img", func(_ int, el *colly.HTMLElement) {
+			// get the URL for each image
 			imgURL := el.Attr("src")
-			fmt.Println("Printing image")
-			fmt.Println(imgURL)
+			resp, err := http.Get(imgURL)
+			// ugly if/else here because colly doesn't have a continue statement in the foreach
+			if err == nil || resp.StatusCode == 404 {
+				defer resp.Body.Close()
+				file, err := os.Create(fmt.Sprintf("./images/%s", extractFilename(imgURL)))
+				if err == nil {
+					defer file.Close()
+					file.ReadFrom(resp.Body)
+
+					fmt.Println("Printing image")
+					fmt.Println(imgURL)
+				} else {
+					fmt.Printf("failed to write file: %s", imgURL)
+				}
+
+			} else {
+				fmt.Printf("failed to get image: %s", imgURL)
+			}
 		})
 	})
 
@@ -105,7 +128,6 @@ func handleTweets() {
 		if err := c.Visit(fmt.Sprintf("https://web.archive.org/web/%s/%s", data.Id, data.Url)); err != nil {
 			fmt.Println(err.Error())
 		}
-		fmt.Println(data.Url)
 	}
 }
 
