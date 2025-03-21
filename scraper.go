@@ -56,8 +56,8 @@ func tweetCollector() {
 			// only get text pages, because these contain the full tweet data
 			if ov[1] == "text/html" {
 				waybackData = append(waybackData, WaybackData{
-					Id:  ov[0],
-					Url: ov[2],
+					Id:  ov[2],
+					Url: ov[0],
 				})
 			}
 		}
@@ -87,10 +87,25 @@ func handleTweets() {
 
 	c.OnResponse(func(r *colly.Response) {
 		fmt.Println("Page visited: ", r.Request.URL)
+		// Redirects mean it's a retweet
+		if r.StatusCode >= 300 && r.StatusCode < 400 {
+			return
+		}
 	})
 
-	if err := c.Visit(""); err != nil {
-		fmt.Println(err.Error())
+	c.OnHTML(".AdaptiveMedia-container", func(e *colly.HTMLElement) {
+		e.ForEach("img", func(_ int, el *colly.HTMLElement) {
+			imgURL := el.Attr("src")
+			fmt.Println("Printing image")
+			fmt.Println(imgURL)
+		})
+	})
+
+	for _, data := range waybackData {
+		if err := c.Visit(fmt.Sprintf("https://web.archive.org/web/%s/%s", data.Id, data.Url)); err != nil {
+			fmt.Println(err.Error())
+		}
+		fmt.Println(data.Url)
 	}
 }
 
