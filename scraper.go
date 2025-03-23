@@ -17,6 +17,7 @@ type WaybackData struct {
 }
 
 var waybackData []WaybackData
+var waybackUrl string
 
 func extractFilename(url string) string {
 	parts := strings.Split(url, "/")
@@ -82,6 +83,7 @@ func tweetCollector() {
 }
 
 func handleTweets() {
+	fmt.Println("Starting tweet collector")
 	c := colly.NewCollector(
 		colly.AllowedDomains("archive.org", "web.archive.org"),
 		colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"),
@@ -99,6 +101,10 @@ func handleTweets() {
 		}
 	})
 
+	c.OnHTML(".js-tweet-text-container", func(e *colly.HTMLElement) {
+		fmt.Println(e.Text)
+	})
+
 	c.OnHTML(".AdaptiveMedia-container", func(e *colly.HTMLElement) {
 		e.ForEach("img", func(_ int, el *colly.HTMLElement) {
 			// get the URL for each image
@@ -112,20 +118,20 @@ func handleTweets() {
 					defer file.Close()
 					file.ReadFrom(resp.Body)
 
-					fmt.Println("Printing image")
-					fmt.Println(imgURL)
+					fmt.Printf("image found at: %s\n", waybackUrl)
 				} else {
-					fmt.Printf("failed to write file: %s", imgURL)
+					fmt.Printf("failed to write file: %s\n", imgURL)
 				}
 
 			} else {
-				fmt.Printf("failed to get image: %s", imgURL)
+				fmt.Printf("failed to get image: %s\n", imgURL)
 			}
 		})
 	})
 
 	for _, data := range waybackData {
-		if err := c.Visit(fmt.Sprintf("https://web.archive.org/web/%s/%s", data.Id, data.Url)); err != nil {
+		waybackUrl = fmt.Sprintf("https://web.archive.org/web/%s/%s", data.Id, data.Url)
+		if err := c.Visit(waybackUrl); err != nil {
 			fmt.Println(err.Error())
 		}
 	}
